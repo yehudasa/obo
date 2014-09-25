@@ -23,10 +23,16 @@ class OBO:
         bucket = self.get_bucket(bucket_name)
         bucket.configure_versioning(status)
 
-def append_attr(d, k, attr):
-    attrv = getattr(k, attr)
+def append_attr_value(d, attr, attrv):
     if attrv and len(str(attrv)) > 0:
         d[attr] = attrv
+
+def append_attr(d, k, attr):
+    try:
+        attrv = getattr(k, attr)
+    except:
+        return
+    append_attr_value(d, attr, attrv)
 
 def get_attrs(k, attrs):
     d = {}
@@ -72,6 +78,15 @@ class BotoJSONEncoder(json.JSONEncoder):
 def dump_json(o):
     return json.dumps(o, cls=BotoJSONEncoder, indent=4)
 
+
+class OboBucketStatus(json.JSONEncoder):
+    def default(self, k):
+        if isinstance(k, boto.s3.bucket.Bucket):
+            j = { 'name': k.name }
+            append_attr_value(j, 'versioning_status', k.get_versioning_status())
+            return j
+        return json.JSONEncoder.default(self, k)
+
 class OboBucket:
     def __init__(self, obo, args, bucket_name, need_to_exist):
         self.obo = obo
@@ -90,6 +105,9 @@ class OboBucket:
 
     def create(self):
         self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
+
+    def stat(self):
+        print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
 
     def set_versioning(self, status):
         bucket = self.obo.get_bucket(self.bucket_name)
@@ -155,6 +173,7 @@ The commands are:
    list                          List buckets
    list <bucket>                 List objects in bucket
    create <bucket>               Create a bucket
+   stat <bucket>                 Get bucket info
    bucket versioning <bucket>    Enable/disable bucket versioning
 ''')
         parser.add_argument('command', help='Subcommand to run')
@@ -195,6 +214,15 @@ The commands are:
         args = parser.parse_args(sys.argv[2:])
 
         OboBucket(self.obo, args, args.bucket_name, False).create()
+
+    def stat(self):
+        parser = argparse.ArgumentParser(
+            description='Create a bucket',
+            usage='obo create <bucket_name> [<args>]')
+        parser.add_argument('bucket_name')
+        args = parser.parse_args(sys.argv[2:])
+
+        OboBucket(self.obo, args, args.bucket_name, True).stat()
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
