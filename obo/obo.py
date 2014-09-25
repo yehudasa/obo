@@ -57,14 +57,17 @@ class BotoJSONEncoder(json.JSONEncoder):
             return KeyJSONEncoder.default(obj)
         if isinstance(obj, boto.s3.user.User):
             return UserJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.prefix.Prefix):
+            return (lambda x: {'prefix': x.name})(obj)
         return json.JSONEncoder.default(self, obj)
 
 def dump_json(o):
     return json.dumps(obj, cls=BotoJSONEncoder, indent=4)
 
 class OboBucket:
-    def __init__(self, obo, bucket_name, need_to_exist):
+    def __init__(self, obo, args, bucket_name, need_to_exist):
         self.obo = obo
+        self.args = args
         self.bucket_name = bucket_name
         self.bucket = obo.get_bucket(bucket_name)
 
@@ -73,11 +76,21 @@ class OboBucket:
             raise
 
     def list_objects(self):
-        print json.dumps(self.bucket.get_all_keys(), cls=BotoJSONEncoder, indent=4)
+        l = self.bucket.get_all_keys(prefix=self.args.prefix, delimiter=self.args.delimiter,
+                                     marker=self.args.marker, max_keys=self.args.max_keys)
+        print dump_json(l)
 
     def set_versioning(self, status):
         bucket = obo.get_bucket(self.obo, self.bucket_name)
         bucket.configure_versioning(status)
+
+class OboService:
+    def __init__(self, obo, args):
+        self.obo = obo
+        self.args = args
+
+    def list_buckets(self):
+        print dump_json(self.obo.conn.get_all_buckets())
 
 
 class OboCommand:
@@ -91,7 +104,8 @@ class OboCommand:
             usage='''obo <command> [<args>]
 
 The commands are:
-   list       List objects in bucket
+   list               List buckets
+   list <bucket>      List objects in bucket
 ''')
         parser.add_argument('command', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
@@ -107,13 +121,18 @@ The commands are:
     def list(self):
         parser = argparse.ArgumentParser(
             description='List objects in bucket')
-        parser.add_argument('bucket_name')
+        parser.add_argument('bucket_name', nargs='?')
         parser.add_argument('--versions', action='store_true')
+        parser.add_argument('--prefix')
+        parser.add_argument('--delimiter')
+        parser.add_argument('--marker')
+        parser.add_argument('--max-keys')
         args = parser.parse_args(sys.argv[2:])
 
-        ob = OboBucket(self.obo, args.bucket_name, True)
-
-        ob.list_objects()
+        if not args.bucket_name:
+            OboService(self.obo, args).list_buckets()
+        else:
+            OboBucket(self.obo, args, args.bucket_name, True).list_objects()
 
 
 def main():
