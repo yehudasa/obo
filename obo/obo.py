@@ -84,6 +84,8 @@ class OboCommand:
 
     def __init__(self, obo):
         self.obo = obo
+
+    def parse(self):
         parser = argparse.ArgumentParser(
             description='S3 control tool',
             usage='''obo <command> [<args>]
@@ -100,7 +102,7 @@ The commands are:
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
-        getattr(self, args.command)()
+        return getattr(self, args.command)
 
     def list(self):
         parser = argparse.ArgumentParser(
@@ -121,9 +123,10 @@ def main():
 
     obo = OBO(access_key, secret_key, host)
 
-    cmd = OboCommand(obo)
+    oc = OboCommand(obo)
 
-    bucket_name = sys.argv[1]
+    cmd = oc.parse()
 
-    # obo.set_bucket_versioning(bucket_name = sys.argv[1], status = True)
+    cmd()
+
 
