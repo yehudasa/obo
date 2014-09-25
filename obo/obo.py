@@ -51,6 +51,12 @@ class UserJSONEncoder(boto.s3.user.User):
         attrs = ['id', 'display_name']
         return get_attrs(k, attrs)
  
+class BucketJSONEncoder(boto.s3.bucket.Bucket):
+    @staticmethod
+    def default(k):
+        attrs = ['name', 'creation_date']
+        return get_attrs(k, attrs)
+ 
 class BotoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, boto.s3.key.Key):
@@ -59,10 +65,12 @@ class BotoJSONEncoder(json.JSONEncoder):
             return UserJSONEncoder.default(obj)
         if isinstance(obj, boto.s3.prefix.Prefix):
             return (lambda x: {'prefix': x.name})(obj)
+        if isinstance(obj, boto.s3.bucket.Bucket):
+            return BucketJSONEncoder.default(obj)
         return json.JSONEncoder.default(self, obj)
 
 def dump_json(o):
-    return json.dumps(obj, cls=BotoJSONEncoder, indent=4)
+    return json.dumps(o, cls=BotoJSONEncoder, indent=4)
 
 class OboBucket:
     def __init__(self, obo, args, bucket_name, need_to_exist):
