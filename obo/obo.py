@@ -46,11 +46,20 @@ class KeyJSONEncoder(boto.s3.key.Key):
     def default(k):
         attrs = ['name', 'size', 'last_modified', 'metadata', 'cache_control',
                  'content_type', 'content_disposition', 'content_language',
-                 'owner', 'storage_class', 'md5', 'version_id', 'encrypted']
+                 'owner', 'storage_class', 'md5', 'version_id', 'encrypted',
+                 'is_latest', 'delete_marker', 'expiry_date']
         d = get_attrs(k, attrs)
         d['etag'] = k.etag[1:-1]
         return d
-    
+
+class DeleteMarkerJSONEncoder(boto.s3.key.Key):
+    @staticmethod
+    def default(k):
+        attrs = ['name', 'version_id', 'is_latest', 'last_modified', 'owner']
+        d = get_attrs(k, attrs)
+        d['delete_marker'] = True
+        return d
+
 class UserJSONEncoder(boto.s3.user.User):
     @staticmethod
     def default(k):
@@ -67,6 +76,8 @@ class BotoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, boto.s3.key.Key):
             return KeyJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.deletemarker.DeleteMarker):
+            return DeleteMarkerJSONEncoder.default(obj)
         if isinstance(obj, boto.s3.user.User):
             return UserJSONEncoder.default(obj)
         if isinstance(obj, boto.s3.prefix.Prefix):
@@ -99,8 +110,13 @@ class OboBucket:
             raise
 
     def list_objects(self):
-        l = self.bucket.get_all_keys(prefix=self.args.prefix, delimiter=self.args.delimiter,
-                                     marker=self.args.marker, max_keys=self.args.max_keys)
+        if (self.args.list_versions):
+            l = self.bucket.get_all_versions(prefix=self.args.prefix, delimiter=self.args.delimiter,
+                                        key_marker=self.args.key_marker, version_id_marker=self.args.version_id_marker,
+                                        max_keys=self.args.max_keys)
+        else:
+            l = self.bucket.get_all_keys(prefix=self.args.prefix, delimiter=self.args.delimiter,
+                                        marker=self.args.marker, max_keys=self.args.max_keys)
         print dump_json(l)
 
     def create(self):
@@ -197,6 +213,9 @@ The commands are:
         parser.add_argument('--delimiter')
         parser.add_argument('--marker')
         parser.add_argument('--max-keys')
+        parser.add_argument('--list-versions', action='store_true')
+        parser.add_argument('--key-marker')
+        parser.add_argument('--version-id-marker')
         args = parser.parse_args(sys.argv[2:])
 
         if not args.bucket_name:
