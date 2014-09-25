@@ -88,6 +88,9 @@ class OboBucket:
                                      marker=self.args.marker, max_keys=self.args.max_keys)
         print dump_json(l)
 
+    def create(self):
+        self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
+
     def set_versioning(self, status):
         bucket = obo.get_bucket(self.obo, self.bucket_name)
         bucket.configure_versioning(status)
@@ -114,6 +117,7 @@ class OboCommand:
 The commands are:
    list               List buckets
    list <bucket>      List objects in bucket
+   create <bucket>    Create a bucket
 ''')
         parser.add_argument('command', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
@@ -142,6 +146,17 @@ The commands are:
             OboService(self.obo, args).list_buckets()
         else:
             OboBucket(self.obo, args, args.bucket_name, True).list_objects()
+
+    def create(self):
+        parser = argparse.ArgumentParser(
+            description='Create a bucket',
+            usage='obo create <bucket_name> [<args>]')
+        parser.add_argument('bucket_name')
+        parser.add_argument('--location')
+        parser.add_argument('--canned-acl')
+        args = parser.parse_args(sys.argv[2:])
+
+        OboBucket(self.obo, args, args.bucket_name, False).create()
 
 
 def main():
