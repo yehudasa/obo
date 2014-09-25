@@ -19,10 +19,6 @@ class OBO:
     def get_bucket(self, bucket_name):
         return self.conn.lookup(bucket_name)
 
-    def set_bucket_versioning(self, bucket_name, status):
-        bucket = self.get_bucket(bucket_name)
-        bucket.configure_versioning(status)
-
 def append_attr_value(d, attr, attrv):
     if attrv and len(str(attrv)) > 0:
         d[attr] = attrv
