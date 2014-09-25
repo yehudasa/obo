@@ -92,7 +92,7 @@ class OboBucket:
         self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
 
     def set_versioning(self, status):
-        bucket = obo.get_bucket(self.obo, self.bucket_name)
+        bucket = self.obo.get_bucket(self.bucket_name)
         bucket.configure_versioning(status)
 
 class OboService:
@@ -102,6 +102,43 @@ class OboService:
 
     def list_buckets(self):
         print dump_json(self.obo.conn.get_all_buckets())
+
+class OboBucketCommand:
+    def __init__(self, obo, args):
+        self.obo = obo
+        self.args = args
+
+    def parse(self):
+        parser = argparse.ArgumentParser(
+            description='S3 control tool',
+            usage='''obo bucket <subcommand> [--enable[=<true|<false>]]
+
+The subcommands are:
+   versioning                    Manipulate bucket versioning
+''')
+        parser.add_argument('subcommand', help='Subcommand to run')
+        # parse_args defaults to [1:] for args, but you need to
+        # exclude the rest of the args too, or validation will fail
+        args = parser.parse_args(self.args[0:1])
+        if not hasattr(self, args.subcommand):
+            print 'Unrecognized subcommand:', args.subcommand
+            parser.print_help()
+            exit(1)
+        # use dispatch pattern to invoke method with same name
+        return getattr(self, args.subcommand)
+
+    def versioning(self):
+        parser = argparse.ArgumentParser(
+            description='Get/set bucket versioning',
+            usage='obo bucket versioning [bucket_name] [<args>]')
+        parser.add_argument('bucket_name')
+        parser.add_argument('--enable', action='store_true')
+        parser.add_argument('--disable', action='store_true')
+        args = parser.parse_args(self.args[1:])
+
+        assert args.enable != args.disable
+
+        OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable)
 
 
 class OboCommand:
@@ -115,16 +152,17 @@ class OboCommand:
             usage='''obo <command> [<args>]
 
 The commands are:
-   list               List buckets
-   list <bucket>      List objects in bucket
-   create <bucket>    Create a bucket
+   list                          List buckets
+   list <bucket>                 List objects in bucket
+   create <bucket>               Create a bucket
+   bucket versioning <bucket>    Enable/disable bucket versioning
 ''')
         parser.add_argument('command', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command):
-            print 'Unrecognized command'
+            print 'Unrecognized command:', args.command
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
@@ -158,6 +196,9 @@ The commands are:
 
         OboBucket(self.obo, args, args.bucket_name, False).create()
 
+    def bucket(self):
+        cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
+        cmd()
 
 def main():
     access_key = os.environ['S3_ACCESS_KEY_ID']
@@ -166,10 +207,7 @@ def main():
 
     obo = OBO(access_key, secret_key, host)
 
-    oc = OboCommand(obo)
-
-    cmd = oc.parse()
-
+    cmd = OboCommand(obo).parse()
     cmd()
 
 
