@@ -40,8 +40,10 @@ class KeyJSONEncoder(boto.s3.key.Key):
     def default(k):
         attrs = ['name', 'size', 'last_modified', 'metadata', 'cache_control',
                  'content_type', 'content_disposition', 'content_language',
-                 'etag', 'owner', 'storage_class', 'md5', 'version_id', 'encrypted']
-        return get_attrs(k, attrs)
+                 'owner', 'storage_class', 'md5', 'version_id', 'encrypted']
+        d = get_attrs(k, attrs)
+        d['etag'] = k.etag[1:-1]
+        return d
     
 class UserJSONEncoder(boto.s3.user.User):
     @staticmethod
