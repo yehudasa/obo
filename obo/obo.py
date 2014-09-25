@@ -128,7 +128,8 @@ The commands are:
 
     def list(self):
         parser = argparse.ArgumentParser(
-            description='List objects in bucket')
+            description='List buckets or objects in bucket',
+            usage='obo list [bucket_name] [<args>]')
         parser.add_argument('bucket_name', nargs='?')
         parser.add_argument('--versions', action='store_true')
         parser.add_argument('--prefix')
