@@ -125,6 +125,20 @@ class OboBucket:
         bucket = self.obo.get_bucket(self.bucket_name)
         bucket.configure_versioning(status)
 
+    def remove(self):
+        self.obo.conn.delete_bucket(self.bucket_name)
+
+class OboObject:
+    def __init__(self, obo, args, bucket_name, object_name):
+        self.obo = obo
+        self.args = args
+        self.bucket_name = bucket_name
+        self.bucket = obo.get_bucket(bucket_name)
+        self.object_name = object_name
+
+    def remove(self, version_id):
+        self.bucket.delete_key(self.object_name, version_id = version_id)
+
 class OboService:
     def __init__(self, obo, args):
         self.obo = obo
@@ -186,6 +200,7 @@ The commands are:
    list <bucket>                 List objects in bucket
    create <bucket>               Create a bucket
    stat <bucket>                 Get bucket info
+   delete <bucket>[/<key>]       Delete bucket or key
    bucket versioning <bucket>    Enable/disable bucket versioning
 ''')
         parser.add_argument('command', help='Subcommand to run')
@@ -232,12 +247,28 @@ The commands are:
 
     def stat(self):
         parser = argparse.ArgumentParser(
-            description='Create a bucket',
-            usage='obo create <bucket_name> [<args>]')
+            description='Get bucket status',
+            usage='obo stat <bucket_name> [<args>]')
         parser.add_argument('bucket_name')
         args = parser.parse_args(sys.argv[2:])
 
         OboBucket(self.obo, args, args.bucket_name, True).stat()
+
+    def delete(self):
+        parser = argparse.ArgumentParser(
+            description='Delete a bucket or an object',
+            usage='obo delete <target> [<args>]')
+        parser.add_argument('target')
+        parser.add_argument('--version-id')
+        args = parser.parse_args(sys.argv[2:])
+
+        target = args.target.split('/', 1)
+
+        if len(target) == 1:
+            OboBucket(self.obo, args, target[0], False).remove()
+        else:
+            assert len(target) == 2
+            OboObject(self.obo, args, target[0], target[1]).remove(args.version_id)
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
