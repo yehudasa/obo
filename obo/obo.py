@@ -141,6 +141,17 @@ class OboBucket:
 
         k.get_contents_to_file(out, version_id=self.args.version_id)
 
+    def put(self, obj):
+        k = Key(self.bucket)
+        k.key = obj
+
+        if not self.args.in_file:
+            infile = sys.stdin
+        else:
+            infile = open(self.args.in_file, 'rb')
+
+        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True)
+
 class OboObject:
     def __init__(self, obo, args, bucket_name, object_name):
         self.obo = obo
@@ -286,6 +297,21 @@ The commands are:
         assert len(target) == 2
 
         OboBucket(self.obo, args, target[0], True).get(target[1])
+
+    def put(self):
+        parser = argparse.ArgumentParser(
+            description='Put object',
+            usage='obo put <bucket_name>/<key> [<args>]')
+        parser.add_argument('target')
+        parser.add_argument('-i', '--in-file')
+        parser.add_argument('--canned-acl')
+        args = parser.parse_args(sys.argv[2:])
+
+        target = args.target.split('/', 1)
+
+        assert len(target) == 2
+
+        OboBucket(self.obo, args, target[0], True).put(target[1])
 
     def delete(self):
         parser = argparse.ArgumentParser(
