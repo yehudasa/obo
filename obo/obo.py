@@ -4,6 +4,7 @@ import boto
 import boto.s3.connection
 import argparse
 import json
+from boto.s3.key import Key
 
 
 class OBO:
@@ -43,9 +44,10 @@ class KeyJSONEncoder(boto.s3.key.Key):
         attrs = ['name', 'size', 'last_modified', 'metadata', 'cache_control',
                  'content_type', 'content_disposition', 'content_language',
                  'owner', 'storage_class', 'md5', 'version_id', 'encrypted',
-                 'is_latest', 'delete_marker', 'expiry_date']
+                 'delete_marker', 'expiry_date']
         d = get_attrs(k, attrs)
         d['etag'] = k.etag[1:-1]
+        d['is_latest'] = k.is_latest
         return d
 
 class DeleteMarkerJSONEncoder(boto.s3.key.Key):
@@ -128,6 +130,17 @@ class OboBucket:
     def remove(self):
         self.obo.conn.delete_bucket(self.bucket_name)
 
+    def get(self, obj):
+        k = Key(self.bucket)
+        k.key = obj
+
+        if not self.args.out_file:
+            out = sys.stdout
+        else:
+            out = open(self.args.out_file, 'wb')
+
+        k.get_contents_to_file(out, version_id=self.args.version_id)
+
 class OboObject:
     def __init__(self, obo, args, bucket_name, object_name):
         self.obo = obo
@@ -187,10 +200,7 @@ The subcommands are:
 
 class OboCommand:
 
-    def __init__(self, obo):
-        self.obo = obo
-
-    def parse(self):
+    def _parse(self):
         parser = argparse.ArgumentParser(
             description='S3 control tool',
             usage='''obo <command> [<args>]
@@ -200,6 +210,7 @@ The commands are:
    list <bucket>                 List objects in bucket
    create <bucket>               Create a bucket
    stat <bucket>                 Get bucket info
+   get <bucket>/<obj>            Get object
    delete <bucket>[/<key>]       Delete bucket or key
    bucket versioning <bucket>    Enable/disable bucket versioning
 ''')
@@ -207,12 +218,19 @@ The commands are:
         # parse_args defaults to [1:] for args, but you need to
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(sys.argv[1:2])
-        if not hasattr(self, args.command):
+        if not hasattr(self, args.command) or args.command[0] == '_':
             print 'Unrecognized command:', args.command
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
-        return getattr(self, args.command)
+        ret = getattr(self, args.command)
+        access_key = os.environ['S3_ACCESS_KEY_ID']
+        secret_key = os.environ['S3_SECRET_ACCESS_KEY']
+        host = os.environ['S3_HOSTNAME']
+
+        self.obo = OBO(access_key, secret_key, host)
+        return ret
+
 
     def list(self):
         parser = argparse.ArgumentParser(
@@ -254,6 +272,21 @@ The commands are:
 
         OboBucket(self.obo, args, args.bucket_name, True).stat()
 
+    def get(self):
+        parser = argparse.ArgumentParser(
+            description='Get object',
+            usage='obo get <bucket_name>/<key> [<args>]')
+        parser.add_argument('source')
+        parser.add_argument('--version-id')
+        parser.add_argument('-o', '--out-file')
+        args = parser.parse_args(sys.argv[2:])
+
+        target = args.source.split('/', 1)
+
+        assert len(target) == 2
+
+        OboBucket(self.obo, args, target[0], True).get(target[1])
+
     def delete(self):
         parser = argparse.ArgumentParser(
             description='Delete a bucket or an object',
@@ -275,13 +308,7 @@ The commands are:
         cmd()
 
 def main():
-    access_key = os.environ['S3_ACCESS_KEY_ID']
-    secret_key = os.environ['S3_SECRET_ACCESS_KEY']
-    host = os.environ['S3_HOSTNAME']
-
-    obo = OBO(access_key, secret_key, host)
-
-    cmd = OboCommand(obo).parse()
+    cmd = OboCommand()._parse()
     cmd()
 
 
