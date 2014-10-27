@@ -40,14 +40,15 @@ def get_attrs(k, attrs):
 
 class KeyJSONEncoder(boto.s3.key.Key):
     @staticmethod
-    def default(k):
+    def default(k, versioned=False):
         attrs = ['name', 'size', 'last_modified', 'metadata', 'cache_control',
                  'content_type', 'content_disposition', 'content_language',
                  'owner', 'storage_class', 'md5', 'version_id', 'encrypted',
                  'delete_marker', 'expiry_date']
         d = get_attrs(k, attrs)
         d['etag'] = k.etag[1:-1]
-        d['is_latest'] = k.is_latest
+        if versioned:
+            d['is_latest'] = k.is_latest
         return d
 
 class DeleteMarkerJSONEncoder(boto.s3.key.Key):
@@ -84,8 +85,14 @@ class BotoJSONEncoder(json.JSONEncoder):
             return BucketJSONEncoder.default(obj)
         return json.JSONEncoder.default(self, obj)
 
-def dump_json(o):
-    return json.dumps(o, cls=BotoJSONEncoder, indent=4)
+class BotoJSONEncoderListBucketVersioned(BotoJSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, boto.s3.key.Key):
+            return KeyJSONEncoder.default(obj, versioned=True)
+        return BotoJSONEncoder.default(self, obj)
+
+def dump_json(o, cls=BotoJSONEncoder):
+    return json.dumps(o, cls=cls, indent=4)
 
 
 class OboBucketStatus(json.JSONEncoder):
@@ -112,10 +119,11 @@ class OboBucket:
             l = self.bucket.get_all_versions(prefix=self.args.prefix, delimiter=self.args.delimiter,
                                         key_marker=self.args.key_marker, version_id_marker=self.args.version_id_marker,
                                         max_keys=self.args.max_keys)
+            print dump_json(l, cls=BotoJSONEncoderListBucketVersioned)
         else:
             l = self.bucket.get_all_keys(prefix=self.args.prefix, delimiter=self.args.delimiter,
                                         marker=self.args.marker, max_keys=self.args.max_keys)
-        print dump_json(l)
+            print dump_json(l)
 
     def create(self):
         self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
