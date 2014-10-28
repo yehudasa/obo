@@ -54,9 +54,10 @@ class KeyJSONEncoder(boto.s3.key.Key):
 class DeleteMarkerJSONEncoder(boto.s3.key.Key):
     @staticmethod
     def default(k):
-        attrs = ['name', 'version_id', 'is_latest', 'last_modified', 'owner']
+        attrs = ['name', 'version_id', 'last_modified', 'owner']
         d = get_attrs(k, attrs)
         d['delete_marker'] = True
+        d['is_latest'] = k.is_latest
         return d
 
 class UserJSONEncoder(boto.s3.user.User):
