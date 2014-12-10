@@ -105,11 +105,12 @@ class OboBucketStatus(json.JSONEncoder):
         return json.JSONEncoder.default(self, k)
 
 class OboBucket:
-    def __init__(self, obo, args, bucket_name, need_to_exist):
+    def __init__(self, obo, args, bucket_name, need_to_exist, query_args = None):
         self.obo = obo
         self.args = args
         self.bucket_name = bucket_name
         self.bucket = obo.get_bucket(bucket_name)
+        self.query_args = query_args
 
         if need_to_exist and not self.bucket:
             print 'ERROR: bucket does not exist:', bucket_name
@@ -159,15 +160,16 @@ class OboBucket:
         else:
             infile = open(self.args.in_file, 'rb')
 
-        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True)
+        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args)
 
 class OboObject:
-    def __init__(self, obo, args, bucket_name, object_name):
+    def __init__(self, obo, args, bucket_name, object_name, query_args = None):
         self.obo = obo
         self.args = args
         self.bucket_name = bucket_name
         self.bucket = obo.get_bucket(bucket_name)
         self.object_name = object_name
+        self.query_args = query_args
 
     def remove(self, version_id):
         self.bucket.delete_key(self.object_name, version_id = version_id)
@@ -251,6 +253,24 @@ The commands are:
         self.obo = OBO(access_key, secret_key, host)
         return ret
 
+    def _add_rgwx_parser_args(self, parser):
+        parser.add_argument('--rgwx-uid')
+        parser.add_argument('--rgwx-version-id')
+        parser.add_argument('--rgwx-versioned-epoch')
+
+    def _append_query_arg(self, s, n, v):
+        if not v:
+            return s
+        nv = '{n}={v}'.format(n=n, v=v)
+        if not s:
+            return nv
+        return '{s}&{nv}'.format(s=s, nv=nv)
+
+    def _get_rgwx_query_args(self, args):
+        qa = self._append_query_arg(None, 'rgwx-uid', args.rgwx_uid)
+        qa = self._append_query_arg(qa, 'rgwx-version-id', args.rgwx_version_id)
+        qa = self._append_query_arg(qa, 'rgwx-versioned-epoch', args.rgwx_versioned_epoch)
+        return qa
 
     def list(self):
         parser = argparse.ArgumentParser(
@@ -314,13 +334,16 @@ The commands are:
         parser.add_argument('target')
         parser.add_argument('-i', '--in-file')
         parser.add_argument('--canned-acl')
+        self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
         target = args.target.split('/', 1)
 
+        rgwx_query_args = self._get_rgwx_query_args(args)
+
         assert len(target) == 2
 
-        OboBucket(self.obo, args, target[0], True).put(target[1])
+        OboBucket(self.obo, args, target[0], True, query_args=rgwx_query_args).put(target[1])
 
     def delete(self):
         parser = argparse.ArgumentParser(
@@ -328,9 +351,12 @@ The commands are:
             usage='obo delete <target> [<args>]')
         parser.add_argument('target')
         parser.add_argument('--version-id')
+        self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
         target = args.target.split('/', 1)
+
+        rgwx_query_args = self._get_rgwx_query_args(args)
 
         if len(target) == 1:
             OboBucket(self.obo, args, target[0], False).remove()
