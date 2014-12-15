@@ -184,6 +184,16 @@ class OboObject:
 
         self.obo.conn.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args)
 
+    def copy(self, source, version_id):
+        src_str = '/{bucket}/{object}'.format(bucket=source[0], object=source[1])
+        if version_id and version_id != '':
+            src_str = src_str + '?versionId=' + version_id
+
+        headers = {}
+        headers['x-amz-copy-source'] = src_str
+
+        self.obo.conn.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
+
 class OboService:
     def __init__(self, obo, args):
         self.obo = obo
@@ -365,6 +375,23 @@ The commands are:
         else:
             assert len(target) == 2
             OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id)
+
+    def copy(self):
+        parser = argparse.ArgumentParser(
+            description='Copies an object',
+            usage='obo copy <source> <target> [<args>]')
+        parser.add_argument('source')
+        parser.add_argument('target')
+        parser.add_argument('--version-id')
+        self._add_rgwx_parser_args(parser)
+        args = parser.parse_args(sys.argv[2:])
+
+        source = args.source.split('/', 1)
+        target = args.target.split('/', 1)
+
+        rgwx_query_args = self._get_rgwx_query_args(args)
+
+        OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).copy(source, args.version_id)
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
