@@ -38,6 +38,14 @@ def get_attrs(k, attrs):
 
     return d
 
+def append_query_arg(s, n, v):
+    if not v:
+        return s
+    nv = '{n}={v}'.format(n=n, v=v)
+    if not s:
+        return nv
+    return '{s}&{nv}'.format(s=s, nv=nv)
+
 class KeyJSONEncoder(boto.s3.key.Key):
     @staticmethod
     def default(k, versioned=False):
@@ -172,7 +180,9 @@ class OboObject:
         self.query_args = query_args
 
     def remove(self, version_id):
-        self.bucket.delete_key(self.object_name, version_id = version_id)
+        query_args = append_query_arg(self.query_args, 'versionId', version_id)
+
+        self.obo.conn.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args)
 
 class OboService:
     def __init__(self, obo, args):
@@ -258,18 +268,10 @@ The commands are:
         parser.add_argument('--rgwx-version-id')
         parser.add_argument('--rgwx-versioned-epoch')
 
-    def _append_query_arg(self, s, n, v):
-        if not v:
-            return s
-        nv = '{n}={v}'.format(n=n, v=v)
-        if not s:
-            return nv
-        return '{s}&{nv}'.format(s=s, nv=nv)
-
     def _get_rgwx_query_args(self, args):
-        qa = self._append_query_arg(None, 'rgwx-uid', args.rgwx_uid)
-        qa = self._append_query_arg(qa, 'rgwx-version-id', args.rgwx_version_id)
-        qa = self._append_query_arg(qa, 'rgwx-versioned-epoch', args.rgwx_versioned_epoch)
+        qa = append_query_arg(None, 'rgwx-uid', args.rgwx_uid)
+        qa = append_query_arg(qa, 'rgwx-version-id', args.rgwx_version_id)
+        qa = append_query_arg(qa, 'rgwx-versioned-epoch', args.rgwx_versioned_epoch)
         return qa
 
     def list(self):
@@ -362,7 +364,7 @@ The commands are:
             OboBucket(self.obo, args, target[0], False).remove()
         else:
             assert len(target) == 2
-            OboObject(self.obo, args, target[0], target[1]).remove(args.version_id)
+            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id)
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
