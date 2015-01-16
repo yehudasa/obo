@@ -1,4 +1,5 @@
 import sys
+import socket
 import os
 import boto
 import boto.s3.connection
@@ -9,10 +10,15 @@ from boto.s3.key import Key
 
 class OBO:
     def __init__(self, access_key, secret_key, host):
+        host, port = (host.split(':') + [None])[:2]
+        if port:
+            port = int(port)
+
         self.conn = boto.connect_s3(
                 aws_access_key_id = access_key,
                 aws_secret_access_key = secret_key,
-                host = host,
+                host=host,
+                port=port,
                 is_secure=False,               # uncomment if you are not using ssl
                 calling_format = boto.s3.connection.OrdinaryCallingFormat(),
                 )
@@ -73,13 +79,13 @@ class UserJSONEncoder(boto.s3.user.User):
     def default(k):
         attrs = ['id', 'display_name']
         return get_attrs(k, attrs)
- 
+
 class BucketJSONEncoder(boto.s3.bucket.Bucket):
     @staticmethod
     def default(k):
         attrs = ['name', 'creation_date']
         return get_attrs(k, attrs)
- 
+
 class BotoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, boto.s3.key.Key):
@@ -136,7 +142,10 @@ class OboBucket:
             print dump_json(l)
 
     def create(self):
-        self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
+        try:
+            self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
+        except socket.error as error:
+            print 'Had an issue connecting: %s' % error
 
     def stat(self):
         print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
