@@ -86,6 +86,24 @@ class BucketJSONEncoder(boto.s3.bucket.Bucket):
         attrs = ['name', 'creation_date']
         return get_attrs(k, attrs)
 
+class BucketLifecycleRuleJSONEncoder(boto.s3.lifecycle.Rule):
+    @staticmethod
+    def default(k):
+        attrs = ['id', 'prefix', 'status', 'expiration', 'transition']
+        return get_attrs(k, attrs)
+
+class BucketLifecycleExpirationJSONEncoder(boto.s3.lifecycle.Expiration):
+    @staticmethod
+    def default(k):
+        attrs = ['days', 'date']
+        return get_attrs(k, attrs)
+
+class BucketLifecycleTransitionJSONEncoder(boto.s3.lifecycle.Transition):
+    @staticmethod
+    def default(k):
+        attrs = ['days', 'date', 'storage_class']
+        return get_attrs(k, attrs)
+
 class BotoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, boto.s3.key.Key):
@@ -98,6 +116,12 @@ class BotoJSONEncoder(json.JSONEncoder):
             return (lambda x: {'prefix': x.name})(obj)
         if isinstance(obj, boto.s3.bucket.Bucket):
             return BucketJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.lifecycle.Rule):
+            return BucketLifecycleRuleJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.lifecycle.Expiration):
+            return BucketLifecycleExpirationJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.lifecycle.Transition):
+            return BucketLifecycleTransitionJSONEncoder.default(obj)
         return json.JSONEncoder.default(self, obj)
 
 class BotoJSONEncoderListBucketVersioned(BotoJSONEncoder):
@@ -179,6 +203,51 @@ class OboBucket:
 
         k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args)
 
+    def get_lifecycle(self):
+        try:
+            lc = self.bucket.get_lifecycle_config()
+        except:
+            lc = boto.s3.lifecycle.Lifecycle()
+
+        print dump_json(lc)
+
+    def add_lifecycle(self, rule_id, prefix, status_bool, expiration, transition):
+
+        status = 'Enabled' if status_bool else 'Disabled'
+
+        try:
+            lc = self.bucket.get_lifecycle_config()
+        except:
+            lc = boto.s3.lifecycle.Lifecycle()
+
+        lc.add_rule(rule_id, prefix, status, expiration, transition)
+
+        self.bucket.configure_lifecycle(lc)
+
+    def remove_lifecycle(self, rule_id, remove_all):
+
+        if remove_all:
+            self.bucket.delete_lifecycle_configuration()
+            return
+
+        new_lc = boto.s3.lifecycle.Lifecycle()
+
+        try:
+            lc = self.bucket.get_lifecycle_config()
+        except:
+            return
+
+        for r in lc:
+            if r.id != rule_id:
+                new_lc.append(r) # add_rule(r.id, r.prefix, r.status, r.expiration, r.transition)
+
+        if len(new_lc) == 0:
+            self.bucket.delete_lifecycle_configuration()
+            return
+
+        self.bucket.configure_lifecycle(new_lc)
+
+
 class OboObject:
     def __init__(self, obo, args, bucket_name, object_name, query_args = None):
         self.obo = obo
@@ -211,6 +280,73 @@ class OboService:
     def list_buckets(self):
         print dump_json(self.obo.conn.get_all_buckets())
 
+class OboBucketLifecycleCommand:
+    def __init__(self, obo, args):
+        self.obo = obo
+        self.args = args
+
+    def parse(self):
+        parser = argparse.ArgumentParser(
+            description='S3 control tool',
+            usage='obo bucket lifecycle [add | remove | get] <bucket> [<args>]')
+        parser.add_argument('subcommand', help='Subcommand to run')
+        # parse_args defaults to [1:] for args, but you need to
+        # exclude the rest of the args too, or validation will fail
+        args = parser.parse_args(self.args[0:1])
+        if not hasattr(self, args.subcommand):
+            print 'Unrecognized subcommand:', args.subcommand
+            parser.print_help()
+            exit(1)
+        # use dispatch pattern to invoke method with same name
+        return getattr(self, args.subcommand)
+
+    def get(self):
+        parser = argparse.ArgumentParser(
+            description='Get bucket lifecycle configuration',
+            usage='obo bucket lifecycle get <bucket>')
+        parser.add_argument('bucket_name')
+        args = parser.parse_args(self.args[1:])
+
+        OboBucket(self.obo, args, args.bucket_name, True).get_lifecycle()
+
+    def add(self):
+        parser = argparse.ArgumentParser(
+            description='Add bucket lifecycle configuration',
+            usage='obo bucket lifecycle add <bucket>')
+        parser.add_argument('bucket_name')
+        parser.add_argument('--id')
+        parser.add_argument('--prefix')
+        parser.add_argument('--enable', action='store_true')
+        parser.add_argument('--disable', action='store_true')
+        parser.add_argument('--expiration-days')
+        parser.add_argument('--expiration-date')
+        parser.add_argument('--transition-days')
+        parser.add_argument('--transition-date')
+        parser.add_argument('--transition-storage-class')
+        args = parser.parse_args(self.args[1:])
+
+        assert args.enable != args.disable
+
+        expiration = boto.s3.lifecycle.Expiration(args.expiration_days, args.expiration_date)
+        transition = None
+        if args.transition_storage_class:
+            transition = boto.s3.lifecycle.Transition(args.transition_days, args.transition_date, args.transition_storage_class)
+
+        OboBucket(self.obo, args, args.bucket_name, True).add_lifecycle(args.id, args.prefix,
+                args.enable, expiration, transition)
+
+    def remove(self):
+        parser = argparse.ArgumentParser(
+            description='Delete bucket lifecycle configuration',
+            usage='obo bucket lifecycle remove <bucket>')
+        parser.add_argument('bucket_name')
+        parser.add_argument('--id')
+        parser.add_argument('--remove-all', action='store_true', default=False)
+        args = parser.parse_args(self.args[1:])
+
+        OboBucket(self.obo, args, args.bucket_name, True).remove_lifecycle(args.id, args.remove_all)
+
+
 class OboBucketCommand:
     def __init__(self, obo, args):
         self.obo = obo
@@ -223,6 +359,7 @@ class OboBucketCommand:
 
 The subcommands are:
    versioning                    Manipulate bucket versioning
+   lifecycle                     Manipulate bucket lifecycle configuration
 ''')
         parser.add_argument('subcommand', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
@@ -248,6 +385,10 @@ The subcommands are:
 
         OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable)
 
+    def lifecycle(self):
+        cmd = OboBucketLifecycleCommand(self.obo, sys.argv[3:]).parse()
+        cmd()
+
 
 class OboCommand:
 
@@ -264,6 +405,7 @@ The commands are:
    get <bucket>/<obj>            Get object
    delete <bucket>[/<key>]       Delete bucket or key
    bucket versioning <bucket>    Enable/disable bucket versioning
+   bucket lifecycle <...>        Manage bucket lifecycle
 ''')
         parser.add_argument('command', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
