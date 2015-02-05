@@ -171,8 +171,12 @@ class OboBucket:
         except socket.error as error:
             print 'Had an issue connecting: %s' % error
 
-    def stat(self):
-        print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
+    def stat(self, obj):
+        if obj:
+            k = self.bucket.get_key(obj)
+            print dump_json(k)
+        else:
+            print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
 
     def set_versioning(self, status):
         bucket = self.obo.get_bucket(self.bucket_name)
@@ -469,11 +473,15 @@ The commands are:
     def stat(self):
         parser = argparse.ArgumentParser(
             description='Get bucket status',
-            usage='obo stat <bucket_name> [<args>]')
-        parser.add_argument('bucket_name')
+            usage='obo stat <target> [<args>]')
+        parser.add_argument('target', help='Target of operation: <bucket>[/<object>]')
         args = parser.parse_args(sys.argv[2:])
 
-        OboBucket(self.obo, args, args.bucket_name, True).stat()
+        target = args.target.split('/', 1)
+
+        obj = target[1] if len(target) == 2 else None
+
+        OboBucket(self.obo, args, target[0], True).stat(obj)
 
     def get(self):
         parser = argparse.ArgumentParser(
