@@ -104,6 +104,36 @@ class BucketLifecycleTransitionJSONEncoder(boto.s3.lifecycle.Transition):
         attrs = ['days', 'date', 'storage_class']
         return get_attrs(k, attrs)
 
+class WebsiteRedirectJSONEncoder(boto.s3.website.Redirect):
+    @staticmethod
+    def default(k):
+        attrs = ['hostname', 'protocol', 'replace_key', 'replace_key_prefix', 'http_redirect_code']
+        return get_attrs(k, attrs)
+
+class WebsiteConditionJSONEncoder(boto.s3.website.Redirect):
+    @staticmethod
+    def default(k):
+        attrs = ['key_prefix', 'http_error_code']
+        return get_attrs(k, attrs)
+
+class WebsiteRedirectLocationJSONEncoder(boto.s3.website.RedirectLocation):
+    @staticmethod
+    def default(k):
+        attrs = ['hostname', 'protocol']
+        return get_attrs(k, attrs)
+
+class WebsiteRoutingRuleJSONEncoder(boto.s3.website.RoutingRule):
+    @staticmethod
+    def default(k):
+        attrs = ['condition', 'redirect']
+        return get_attrs(k, attrs)
+
+class WebsiteConfigurationJSONEncoder(boto.s3.website.WebsiteConfiguration):
+    @staticmethod
+    def default(k):
+        attrs = ['suffix', 'error_key', 'redirect_all_requests_to', 'routing_rules']
+        return get_attrs(k, attrs)
+
 class BotoJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, boto.s3.key.Key):
@@ -122,6 +152,16 @@ class BotoJSONEncoder(json.JSONEncoder):
             return BucketLifecycleExpirationJSONEncoder.default(obj)
         if isinstance(obj, boto.s3.lifecycle.Transition):
             return BucketLifecycleTransitionJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.website.Redirect):
+            return WebsiteRedirectJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.website.Condition):
+            return WebsiteConditionJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.website.RedirectLocation):
+            return WebsiteRedirectLocationJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.website.RoutingRule):
+            return WebsiteRoutingRuleJSONEncoder.default(obj)
+        if isinstance(obj, boto.s3.website.WebsiteConfiguration):
+            return WebsiteConfigurationJSONEncoder.default(obj)
         return json.JSONEncoder.default(self, obj)
 
 class BotoJSONEncoderListBucketVersioned(BotoJSONEncoder):
@@ -181,6 +221,37 @@ class OboBucket:
     def set_versioning(self, status):
         bucket = self.obo.get_bucket(self.bucket_name)
         bucket.configure_versioning(status)
+
+    def delete_website(self):
+        bucket = self.obo.get_bucket(self.bucket_name)
+        bucket.delete_website_configuration()
+
+    def get_website(self):
+        bucket = self.obo.get_bucket(self.bucket_name)
+        print dump_json(bucket.get_website_configuration_obj())
+
+    def configure_website(self, suffix, error_key, redirect_all_host, redirect_all_protocol,
+            condition_key_prefix, condition_http_error_code, redirect_hostname, redirect_protocol,
+            redirect_replace_key, replace_key_prefix, http_redirect_code):
+        bucket = self.obo.get_bucket(self.bucket_name)
+        try:
+            config = bucket.get_website_configuration_obj()
+        except:
+            config = boto.s3.website.WebsiteConfiguration()
+
+        if suffix:
+            config.suffix = suffix
+        if error_key:
+            config.error_key = error_key
+        if redirect_all_host or redirect_all_protocol:
+            config.redirect_all_requests_to = boto.s3.website.RedirectLocation(redirect_all_host, redirect_all_protocol)
+        redirect_rule = None
+        if condition_key_prefix or condition_http_error_code:
+            redirect = boto.s3.website.Redirect(redirect_hostname, redirect_protocol, redirect_replace_key, replace_key_prefix, http_redirect_code)
+            redirect_rule = boto.s3.website.RoutingRule(boto.s3.website.Condition(condition_key_prefix, condition_http_error_code), redirect)
+            config.routing_rules.append(redirect_rule)
+
+        bucket.set_website_configuration(config)
 
     def remove(self):
         self.obo.conn.delete_bucket(self.bucket_name)
@@ -389,6 +460,37 @@ The subcommands are:
 
         OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable)
 
+    def website(self):
+        parser = argparse.ArgumentParser(
+            description='Get/set/delete bucket website',
+            usage='obo bucket website [bucket_name] [--set|--delete|--get] [<args>]')
+        parser.add_argument('bucket_name')
+        parser.add_argument('--set', action='store_true')
+        parser.add_argument('--delete', action='store_true')
+        parser.add_argument('--get', action='store_true')
+        parser.add_argument('--suffix')
+        parser.add_argument('--error-key')
+        parser.add_argument('--redirect-all-host')
+        parser.add_argument('--redirect-all-protocol')
+        parser.add_argument('--condition-key-prefix')
+        parser.add_argument('--condition-http-error-code')
+        parser.add_argument('--redirect-hostname')
+        parser.add_argument('--redirect-protocol')
+        parser.add_argument('--redirect-replace-key')
+        parser.add_argument('--redirect-replace-key-prefix')
+        parser.add_argument('--http-redirect-code')
+        args = parser.parse_args(self.args[1:])
+
+        if args.set:
+            OboBucket(self.obo, args, args.bucket_name, True).configure_website(args.suffix, args.error_key, args.redirect_all_host, args.redirect_all_protocol,
+                    args.condition_key_prefix, args.condition_http_error_code,
+                    args.redirect_hostname, args.redirect_protocol, args.redirect_replace_key, args.redirect_replace_key_prefix,
+                    args.http_redirect_code)
+        elif args.delete:
+            OboBucket(self.obo, args, args.bucket_name, True).delete_website()
+        else:
+            OboBucket(self.obo, args, args.bucket_name, True).get_website()
+
     def lifecycle(self):
         cmd = OboBucketLifecycleCommand(self.obo, sys.argv[3:]).parse()
         cmd()
@@ -410,6 +512,7 @@ The commands are:
    delete <bucket>[/<key>]       Delete bucket or key
    bucket versioning <bucket>    Enable/disable bucket versioning
    bucket lifecycle <...>        Manage bucket lifecycle
+   bucket website <...>          Manage bucket website
 ''')
         parser.add_argument('command', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
