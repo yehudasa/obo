@@ -535,11 +535,17 @@ The commands are:
         parser.add_argument('--rgwx-uid')
         parser.add_argument('--rgwx-version-id')
         parser.add_argument('--rgwx-versioned-epoch')
+        parser.add_argument('--rgwx-source-zone')
+        parser.add_argument('--rgwx-client-id')
+        parser.add_argument('--rgwx-op-id')
 
     def _get_rgwx_query_args(self, args):
         qa = append_query_arg(None, 'rgwx-uid', args.rgwx_uid)
         qa = append_query_arg(qa, 'rgwx-version-id', args.rgwx_version_id)
         qa = append_query_arg(qa, 'rgwx-versioned-epoch', args.rgwx_versioned_epoch)
+        qa = append_query_arg(qa, 'rgwx-source-zone', args.rgwx_source_zone)
+        qa = append_query_arg(qa, 'rgwx-client-id', args.rgwx_client_id)
+        qa = append_query_arg(qa, 'rgwx-op-id', args.rgwx_op_id)
         return qa
 
     def list(self):
