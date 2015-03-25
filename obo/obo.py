@@ -265,7 +265,13 @@ class OboBucket:
         else:
             out = open(self.args.out_file, 'wb')
 
-        k.get_contents_to_file(out, version_id=self.args.version_id)
+        headers = {}
+        if self.args.if_modified_since:
+            headers['If-Modified-Since'] = self.args.if_modified_since
+        if self.args.if_unmodified_since:
+            headers['If-Unmodified-Since'] = self.args.if_unmodified_since
+
+        k.get_contents_to_file(out, version_id=self.args.version_id, headers=headers)
 
     def put(self, obj):
         k = Key(self.bucket)
@@ -538,6 +544,7 @@ The commands are:
         parser.add_argument('--rgwx-source-zone')
         parser.add_argument('--rgwx-client-id')
         parser.add_argument('--rgwx-op-id')
+        parser.add_argument('--rgwx-copy-if-newer', action='store_true')
 
     def _get_rgwx_query_args(self, args):
         qa = append_query_arg(None, 'rgwx-uid', args.rgwx_uid)
@@ -546,6 +553,7 @@ The commands are:
         qa = append_query_arg(qa, 'rgwx-source-zone', args.rgwx_source_zone)
         qa = append_query_arg(qa, 'rgwx-client-id', args.rgwx_client_id)
         qa = append_query_arg(qa, 'rgwx-op-id', args.rgwx_op_id)
+        qa = append_query_arg(qa, 'rgwx-copy-if-newer', args.rgwx_copy_if_newer)
         return qa
 
     def list(self):
@@ -598,6 +606,8 @@ The commands are:
             usage='obo get <bucket_name>/<key> [<args>]')
         parser.add_argument('source')
         parser.add_argument('--version-id')
+        parser.add_argument('--if-modified-since')
+        parser.add_argument('--if-unmodified-since')
         parser.add_argument('-o', '--out-file')
         args = parser.parse_args(sys.argv[2:])
 
