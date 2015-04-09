@@ -342,10 +342,14 @@ class OboObject:
         self.object_name = object_name
         self.query_args = query_args
 
-    def remove(self, version_id):
+    def remove(self, version_id, if_unmodified_since):
         query_args = append_query_arg(self.query_args, 'versionId', version_id)
 
-        self.obo.conn.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args)
+        headers = {}
+        if if_unmodified_since is not None:
+            headers['x-amz-delete-if-unmodified-since'] = if_unmodified_since
+
+        self.obo.conn.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args, headers=headers)
 
     def copy(self, source, version_id):
         src_str = '/{bucket}/{object}'.format(bucket=source[0], object=source[1])
@@ -646,6 +650,7 @@ The commands are:
             usage='obo delete <target> [<args>]')
         parser.add_argument('target')
         parser.add_argument('--version-id')
+        parser.add_argument('--if-unmodified-since')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
@@ -657,7 +662,7 @@ The commands are:
             OboBucket(self.obo, args, target[0], False).remove()
         else:
             assert len(target) == 2
-            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id)
+            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id, args.if_unmodified_since)
 
     def copy(self):
         parser = argparse.ArgumentParser(
