@@ -256,6 +256,11 @@ class OboBucket:
     def remove(self):
         self.obo.conn.delete_bucket(self.bucket_name)
 
+    def getacl(self, obj):
+        acl = self.bucket.get_acl(obj, version_id=self.args.version_id)
+        # TODO include a better format option for importing back
+        print acl
+
     def get(self, obj):
         k = Key(self.bucket)
         k.key = obj
@@ -506,6 +511,7 @@ class OboCommand:
 The commands are:
    list                          List buckets
    list <bucket>                 List objects in bucket
+   getacl <bucket>[/<key>]       Get object ACL
    create <bucket>               Create a bucket
    stat <bucket>                 Get bucket info
    get <bucket>/<obj>            Get object
@@ -600,6 +606,20 @@ The commands are:
         assert len(target) == 2
 
         OboBucket(self.obo, args, target[0], True).get(target[1])
+
+    def getacl(self):
+        parser = argparse.ArgumentParser(
+            description='Get object',
+            usage='obo getcl <bucket_name>/<key> [<args>]')
+        parser.add_argument('source')
+        parser.add_argument('--version-id')
+        args = parser.parse_args(sys.argv[2:])
+
+        target = args.source.split('/', 1)
+
+        assert len(target) == 2
+
+        OboBucket(self.obo, args, target[0], True).getacl(target[1])
 
     def put(self):
         parser = argparse.ArgumentParser(
