@@ -616,10 +616,9 @@ The commands are:
         args = parser.parse_args(sys.argv[2:])
 
         target = args.source.split('/', 1)
+        obj = target[1] if len(target) == 2 else ''
 
-        assert len(target) == 2
-
-        OboBucket(self.obo, args, target[0], True).getacl(target[1])
+        OboBucket(self.obo, args, target[0], True).getacl(obj)
 
     def put(self):
         parser = argparse.ArgumentParser(
