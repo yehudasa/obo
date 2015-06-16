@@ -10,7 +10,7 @@ from boto.s3.key import Key
 
 class OBO:
     def __init__(self, access_key, secret_key, host):
-        host, port = (host.split(':') + [None])[:2]
+        host, port = (host.rsplit(':', 1) + [None])[:2]
         if port:
             port = int(port)
 
