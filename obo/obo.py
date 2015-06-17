@@ -290,8 +290,25 @@ class OboBucket:
         if self.args.content_type is not None:
             headers['Content-Type'] = self.args.content_type
 
-        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args,
-                reduced_redundancy = reduced_redundancy, headers = headers)
+        if self.args.multipart:
+            part_num = 1
+            part_size = self.args.part_size
+
+            infile.seek(0, os.SEEK_END)
+            file_size = infile.tell()
+
+            mp = self.bucket.initiate_multipart_upload(obj, headers=headers)
+            for offset in xrange(0, file_size, part_size):
+                write_len = min(part_size, file_size - offset)
+                infile.seek(offset, os.SEEK_SET)
+                mp.upload_part_from_file(fp=infile, part_num=part_num, size=write_len)
+                part_num += 1
+
+            mp.complete_upload()
+
+        else:
+            k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args,
+                 reduced_redundancy = reduced_redundancy, headers = headers)
 
     def get_lifecycle(self):
         try:
@@ -638,6 +655,8 @@ The commands are:
         parser.add_argument('-i', '--in-file')
         parser.add_argument('--canned-acl')
         parser.add_argument('--content-type')
+        parser.add_argument('--multipart', action='store_true')
+        parser.add_argument('--part_size', type=int, default=8*1024*1024)
         parser.add_argument('--storage-class', choices = ['STANDARD', 'REDUCED_REDUNDANCY'])
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
