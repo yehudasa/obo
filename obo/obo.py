@@ -286,7 +286,12 @@ class OboBucket:
         if self.args.storage_class == 'REDUCED_REDUNDANCY':
             reduced_redundancy = True
 
-        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args, reduced_redundancy = reduced_redundancy)
+        headers = {}
+        if self.args.content_type is not None:
+            headers['Content-Type'] = self.args.content_type
+
+        k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args,
+                reduced_redundancy = reduced_redundancy, headers = headers)
 
     def get_lifecycle(self):
         try:
@@ -632,6 +637,7 @@ The commands are:
         parser.add_argument('target')
         parser.add_argument('-i', '--in-file')
         parser.add_argument('--canned-acl')
+        parser.add_argument('--content-type')
         parser.add_argument('--storage-class', choices = ['STANDARD', 'REDUCED_REDUNDANCY'])
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
