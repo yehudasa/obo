@@ -207,7 +207,10 @@ class OboBucket:
 
     def create(self):
         try:
-            self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl)
+            loc = self.args.location
+            if not loc:
+                loc = ''
+            self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl, location=loc)
         except socket.error as error:
             print 'Had an issue connecting: %s' % error
 
