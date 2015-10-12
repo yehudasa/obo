@@ -58,7 +58,7 @@ class KeyJSONEncoder(boto.s3.key.Key):
         attrs = ['name', 'size', 'last_modified', 'metadata', 'cache_control',
                  'content_type', 'content_disposition', 'content_language',
                  'owner', 'storage_class', 'md5', 'version_id', 'encrypted',
-                 'delete_marker', 'expiry_date', 'VersionedEpoch']
+                 'delete_marker', 'expiry_date', 'VersionedEpoch', 'RgwxTag']
         d = get_attrs(k, attrs)
         d['etag'] = k.etag[1:-1]
         if versioned:
