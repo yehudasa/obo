@@ -274,6 +274,9 @@ class OboBucket:
         if self.args.if_unmodified_since:
             headers['If-Unmodified-Since'] = self.args.if_unmodified_since
 
+        if self.args.date:
+            headers['Date'] = self.args.date
+
         k.get_contents_to_file(out, version_id=self.args.version_id, headers=headers)
 
     def put(self, obj):
@@ -641,6 +644,7 @@ The commands are:
         parser.add_argument('--version-id')
         parser.add_argument('--if-modified-since')
         parser.add_argument('--if-unmodified-since')
+        parser.add_argument('--date')
         parser.add_argument('-o', '--out-file')
         args = parser.parse_args(sys.argv[2:])
 
