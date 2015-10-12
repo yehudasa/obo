@@ -316,6 +316,14 @@ class OboBucket:
             k.set_contents_from_file(infile, policy=self.args.canned_acl, rewind=True, query_args=self.query_args,
                  reduced_redundancy = reduced_redundancy, headers = headers)
 
+    def get_location(self):
+        try:
+            loc = self.bucket.get_location()
+        except:
+            loc = ''
+
+        print dump_json(loc)
+
     def get_lifecycle(self):
         try:
             lc = self.bucket.get_lifecycle_config()
@@ -396,6 +404,35 @@ class OboService:
 
     def list_buckets(self):
         print dump_json(self.obo.conn.get_all_buckets())
+
+class OboBucketLocationCommand:
+    def __init__(self, obo, args):
+        self.obo = obo
+        self.args = args
+
+    def parse(self):
+        parser = argparse.ArgumentParser(
+            description='S3 control tool',
+            usage='obo bucket location get <bucket> [<args>]')
+        parser.add_argument('subcommand', help='Subcommand to run')
+        # parse_args defaults to [1:] for args, but you need to
+        # exclude the rest of the args too, or validation will fail
+        args = parser.parse_args(self.args[0:1])
+        if not hasattr(self, args.subcommand):
+            print 'Unrecognized subcommand:', args.subcommand
+            parser.print_help()
+            exit(1)
+        # use dispatch pattern to invoke method with same name
+        return getattr(self, args.subcommand)
+
+    def get(self):
+        parser = argparse.ArgumentParser(
+            description='Get bucket location',
+            usage='obo bucket location get <bucket>')
+        parser.add_argument('bucket_name')
+        args = parser.parse_args(self.args[1:])
+
+        OboBucket(self.obo, args, args.bucket_name, True).get_location()
 
 class OboBucketLifecycleCommand:
     def __init__(self, obo, args):
@@ -537,6 +574,9 @@ The subcommands are:
         cmd = OboBucketLifecycleCommand(self.obo, sys.argv[3:]).parse()
         cmd()
 
+    def location(self):
+        cmd = OboBucketLocationCommand(self.obo, sys.argv[3:]).parse()
+        cmd()
 
 class OboCommand:
 
@@ -554,6 +594,7 @@ The commands are:
    delete <bucket>[/<key>]       Delete bucket or key
    bucket versioning <bucket>    Enable/disable bucket versioning
    bucket lifecycle <...>        Manage bucket lifecycle
+   bucket location get <...>     Read bucket location
    bucket website <...>          Manage bucket website
 ''')
         parser.add_argument('command', help='Subcommand to run')
