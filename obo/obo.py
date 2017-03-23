@@ -5,8 +5,12 @@ import boto
 import boto.s3.connection
 import argparse
 import json
+import urllib
 from boto.s3.key import Key
 
+import xml.etree.cElementTree as et
+from xmljson import yahoo as xj
+from xml.etree.ElementTree import fromstring as xmlfromstring
 
 class OBO:
     def __init__(self, access_key, secret_key, host):
@@ -397,6 +401,44 @@ class OboObject:
 
         self.obo.conn.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
 
+def next_xml_entry(attr):
+    if attr.text:
+        print 'attr={', attr.tag, attr.text, '}'
+        return (attr.tag, attr.text)
+    else:
+        result = []
+        for el in attr.getiterator():
+            print '>', el
+            result.append(dict(next_xml_entry(x) for x in el))
+        return (attr.tag, None)
+        #return [dict(next_xml_entry(x) for x in el) for el in attr.getchildren()]
+
+class OboMDSearch:
+    def __init__(self, obo, args, bucket_name, query, query_args = None):
+        self.obo = obo
+        self.args = args
+        self.bucket_name = bucket_name or ''
+        self.query = query
+        self.query_args = query_args
+
+    def search(self):
+        q = self.query or ''
+        query_args = append_query_arg(self.query_args, 'query', urllib.quote_plus(q))
+
+        headers = {}
+
+        result = self.obo.conn.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
+        if result.status == 200:
+            s = result.read()
+            print dump_json(xj.data(xmlfromstring(s)))
+            # print dump_json([dict(next_xml_entry(attr) for attr in el) for el in et.fromstring(s)])
+
+
+        else:
+            print 'ERROR: http status: ' + str(result.status)
+            print result.read()
+
+
 class OboService:
     def __init__(self, obo, args):
         self.obo = obo
@@ -753,6 +795,19 @@ The commands are:
         rgwx_query_args = self._get_rgwx_query_args(args)
 
         OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).copy(source, args.version_id)
+
+    def mdsearch(self):
+        parser = argparse.ArgumentParser(
+            description='Performs metadata search',
+            usage='obo mdsearch [bucket] --query=<query>')
+        parser.add_argument('bucket', nargs='?')
+        parser.add_argument('--query')
+        self._add_rgwx_parser_args(parser)
+        args = parser.parse_args(sys.argv[2:])
+
+        rgwx_query_args = self._get_rgwx_query_args(args)
+
+        OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).search()
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
