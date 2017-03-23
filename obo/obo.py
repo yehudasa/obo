@@ -425,10 +425,16 @@ class OboMDSearch:
         self.bucket_name = bucket_name or ''
         self.query = query
         self.query_args = query_args
+        self.max_keys = args.max_keys
+        self.marker = args.marker
 
     def search(self):
         q = self.query or ''
         query_args = append_query_arg(self.query_args, 'query', urllib.quote_plus(q))
+        if self.max_keys is not None:
+            query_args = append_query_arg(query_args, 'max-keys', self.max_keys)
+        if self.marker is not None:
+            query_args = append_query_arg(query_args, 'marker', self.marker)
 
         headers = {}
 
@@ -824,6 +830,8 @@ The commands are:
             usage='obo mdsearch [bucket] --query=<query>')
         parser.add_argument('bucket', nargs='?')
         parser.add_argument('--query')
+        parser.add_argument('--max-keys')
+        parser.add_argument('--marker')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
