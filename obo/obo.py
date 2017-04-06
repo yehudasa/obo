@@ -288,7 +288,7 @@ class OboBucket:
 
         k.get_contents_to_file(out, version_id=self.args.version_id, headers=headers)
 
-    def put(self, obj):
+    def put(self, obj, meta_headers):
         k = Key(self.bucket)
         k.key = obj
 
@@ -301,7 +301,7 @@ class OboBucket:
         if self.args.storage_class == 'REDUCED_REDUNDANCY':
             reduced_redundancy = True
 
-        headers = {}
+        headers = meta_headers
         if self.args.content_type is not None:
             headers['Content-Type'] = self.args.content_type
 
@@ -776,16 +776,25 @@ The commands are:
         parser.add_argument('--multipart', action='store_true')
         parser.add_argument('--part_size', type=int, default=8*1024*1024)
         parser.add_argument('--storage-class', choices = ['STANDARD', 'REDUCED_REDUNDANCY'])
+        parser.add_argument('--x-amz-meta', nargs='*')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
         target = args.target.split('/', 1)
 
+        x_amz_meta = {}
+        for meta in args.x_amz_meta:
+            kv = meta.split('=', 1)
+            if len(kv) != 2:
+                continue
+            x_amz_meta['X-Amz-Meta-{k}'.format(k=kv[0])] = kv[1]
+
+
         rgwx_query_args = self._get_rgwx_query_args(args)
 
         assert len(target) == 2
 
-        OboBucket(self.obo, args, target[0], True, query_args=rgwx_query_args).put(target[1])
+        OboBucket(self.obo, args, target[0], True, query_args=rgwx_query_args).put(target[1], x_amz_meta)
 
     def delete(self):
         parser = argparse.ArgumentParser(
