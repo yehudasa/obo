@@ -561,6 +561,7 @@ class OboBucketCommand:
 The subcommands are:
    versioning                    Manipulate bucket versioning
    lifecycle                     Manipulate bucket lifecycle configuration
+   website                       Manipulate bucket website configuration
 ''')
         parser.add_argument('subcommand', help='Subcommand to run')
         # parse_args defaults to [1:] for args, but you need to
@@ -639,7 +640,9 @@ The commands are:
    create <bucket>               Create a bucket
    stat <bucket>                 Get bucket info
    get <bucket>/<obj>            Get object
+   put <bucket>/<obj>            Put object
    delete <bucket>[/<key>]       Delete bucket or key
+   copy <source> <target>        Copies an object
    bucket versioning <bucket>    Enable/disable bucket versioning
    bucket lifecycle <...>        Manage bucket lifecycle
    bucket location get <...>     Read bucket location
