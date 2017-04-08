@@ -12,6 +12,10 @@ import xml.etree.cElementTree as et
 from xmljson import yahoo as xj
 from xml.etree.ElementTree import fromstring as xmlfromstring
 
+class OBOException:
+    def __init__(self, message):
+        self.message = message
+
 class OBO:
     def __init__(self, access_key, secret_key, host):
         host, port = (host.rsplit(':', 1) + [None])[:2]
@@ -29,6 +33,13 @@ class OBO:
 
     def get_bucket(self, bucket_name):
         return self.conn.lookup(bucket_name)
+
+    def make_request(self, method, bucket, key, query_args, headers):
+        result = self.conn.make_request(method, bucket=bucket, key=key, query_args=query_args, headers=headers)
+        if result.status / 100 != 2:
+            raise boto.exception.S3ResponseError(result.status, result.reason, result.read())
+        return result
+
 
 def append_attr_value(d, attr, attrv):
     if attrv and len(str(attrv)) > 0:
@@ -195,8 +206,7 @@ class OboBucket:
         self.query_args = query_args
 
         if need_to_exist and not self.bucket:
-            print 'ERROR: bucket does not exist:', bucket_name
-            raise
+            raise OBOException('bucket does not exist: ' + bucket_name)
 
     def list_objects(self):
         if (self.args.list_versions):
@@ -394,7 +404,7 @@ class OboObject:
         if if_unmodified_since is not None:
             headers['x-amz-delete-if-unmodified-since'] = if_unmodified_since
 
-        self.obo.conn.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args, headers=headers)
+        self.obo.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args, headers=headers)
 
     def copy(self, source, version_id):
         src_str = '/{bucket}/{object}'.format(bucket=source[0], object=source[1])
@@ -404,7 +414,7 @@ class OboObject:
         headers = {}
         headers['x-amz-copy-source'] = src_str
 
-        self.obo.conn.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
+        self.obo.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
 
 def next_xml_entry(attr):
     if attr.text:
@@ -428,6 +438,17 @@ class OboMDSearch:
         self.max_keys = args.max_keys
         self.marker = args.marker
 
+    def config(self, conf):
+        query_args = 'mdsearch'
+        headers = { 'X-Amz-Meta-Search': conf }
+        if self.args.delete:
+            method = 'DELETE'
+        else:
+            method = 'POST'
+
+        self.obo.make_request(method, bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
+
+
     def search(self):
         q = self.query or ''
         query_args = append_query_arg(self.query_args, 'query', urllib.quote_plus(q))
@@ -438,16 +459,9 @@ class OboMDSearch:
 
         headers = {}
 
-        result = self.obo.conn.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
-        if result.status == 200:
-            s = result.read()
-            print dump_json(xj.data(xmlfromstring(s)))
-            # print dump_json([dict(next_xml_entry(attr) for attr in el) for el in et.fromstring(s)])
-
-
-        else:
-            print 'ERROR: http status: ' + str(result.status)
-            print result.read()
+        result = self.obo.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
+        s = result.read()
+        print dump_json(xj.data(xmlfromstring(s)))
 
 
 class OboService:
@@ -783,11 +797,12 @@ The commands are:
         target = args.target.split('/', 1)
 
         x_amz_meta = {}
-        for meta in args.x_amz_meta:
-            kv = meta.split('=', 1)
-            if len(kv) != 2:
-                continue
-            x_amz_meta['X-Amz-Meta-{k}'.format(k=kv[0])] = kv[1]
+        if args.x_amz_meta:
+            for meta in args.x_amz_meta:
+                kv = meta.split('=', 1)
+                if len(kv) != 2:
+                    continue
+                x_amz_meta['X-Amz-Meta-{k}'.format(k=kv[0])] = kv[1]
 
 
         rgwx_query_args = self._get_rgwx_query_args(args)
@@ -841,12 +856,17 @@ The commands are:
         parser.add_argument('--query')
         parser.add_argument('--max-keys')
         parser.add_argument('--marker')
+        parser.add_argument('--config')
+        parser.add_argument('--delete', action='store_true')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
         rgwx_query_args = self._get_rgwx_query_args(args)
 
-        OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).search()
+        if args.config is not None or args.delete:
+            OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).config(args.config)
+        else:
+            OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).search()
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
@@ -854,6 +874,17 @@ The commands are:
 
 def main():
     cmd = OboCommand()._parse()
-    cmd()
+    try:
+        cmd()
+    except boto.exception.S3ResponseError as e:
+        err = { 'status': e.status,
+                'error_code': e.error_code,
+                'message': e.message,
+                'resource': e.resource,
+                'reason': e.reason,
+                }
 
+        print 'ERROR: ' + json.dumps(err)
+    except OBOException as e:
+        print'ERROR: ' + e.message
 
