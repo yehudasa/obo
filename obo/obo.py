@@ -8,10 +8,6 @@ import json
 import urllib
 from boto.s3.key import Key
 
-import xml.etree.cElementTree as et
-from xmljson import yahoo as xj
-from xml.etree.ElementTree import fromstring as xmlfromstring
-
 class OBOException:
     def __init__(self, message):
         self.message = message
@@ -457,11 +453,13 @@ class OboMDSearch:
         if self.marker is not None:
             query_args = append_query_arg(query_args, 'marker', self.marker)
 
+        query_args = append_query_arg(query_args, 'format', 'json')
+
         headers = {}
 
         result = self.obo.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
         s = result.read()
-        print dump_json(xj.data(xmlfromstring(s)))
+        print dump_json(json.loads(s))
 
 
 class OboService:
