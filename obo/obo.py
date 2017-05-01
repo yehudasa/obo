@@ -444,6 +444,18 @@ class OboMDSearch:
 
         self.obo.make_request(method, bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
 
+    def show(self):
+        query_args = 'mdsearch'
+
+        query_args = append_query_arg(query_args, 'format', 'json')
+
+        result = self.obo.make_request('GET', bucket=self.bucket_name, key='', query_args=query_args, headers=None)
+
+        s = result.read()
+
+        print s
+        print dump_json(json.loads(s))
+
 
     def search(self):
         q = self.query or ''
@@ -460,6 +472,31 @@ class OboMDSearch:
         result = self.obo.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
         s = result.read()
         print dump_json(json.loads(s))
+
+        result = json.loads(s)
+
+        l = []
+
+        for entry in result['Objects']:
+            k = boto.s3.key.Key(boto.s3.bucket.Bucket(name=entry['Bucket']), entry['Key'])
+
+            k.version_id = entry['Instance']
+            k.etag = entry['ETag']
+            k.owner = entry['Owner']['ID']
+            k.last_modified = entry['LastModified']
+            k.size = entry['Size']
+            k.content_type = entry['ContentType']
+            k.versioned_epoch = entry['VersionedEpoch']
+
+            k.metadata = {}
+            for e in entry['CustomMetadata']:
+                k.metadata[e['Name']] = e['Value']
+
+            l.append(k)
+
+        l.sort(key = lambda l: (l.name, -l.versioned_epoch))
+
+        print dump_json(l)
 
 
 class OboService:
@@ -856,6 +893,7 @@ The commands are:
         parser.add_argument('--marker')
         parser.add_argument('--config')
         parser.add_argument('--delete', action='store_true')
+        parser.add_argument('--show', action='store_true')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
@@ -863,8 +901,11 @@ The commands are:
 
         if args.config is not None or args.delete:
             OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).config(args.config)
+        elif args.show:
+            OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).show()
         else:
             OboMDSearch(self.obo, args, args.bucket, args.query, query_args=rgwx_query_args).search()
+
 
     def bucket(self):
         cmd = OboBucketCommand(self.obo, sys.argv[2:]).parse()
