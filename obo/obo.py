@@ -415,6 +415,36 @@ class OboObject:
 
         self.obo.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
 
+    def replace(self, source, version_id):
+        src_str = '/{bucket}/{object}'.format(bucket=source[0], object=source[1])
+        if version_id and version_id != '':
+            src_str = src_str + '?versionId=' + version_id
+
+        k = self.bucket.get_key(source[1])
+
+        headers = {}
+        headers['x-amz-copy-source'] = src_str
+        headers['x-amz-metadata-directive'] = 'REPLACE'
+
+        for (h, v) in k.metadata:
+            headers[h] = v;
+
+        if k.content_type:
+            headers['Content-Type'] = k.content_type
+
+        if k.content_encoding:
+            headers['Content-Encoding'] = k.content_encoding
+
+        if k.content_disposition:
+            headers['Content-Disposition'] = k.content_disposition
+
+        if k.cache_control:
+            headers['Cache-Control'] = k.cache_control
+
+        print 'headers=', headers
+
+        self.obo.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
+
 def next_xml_entry(attr):
     if attr.text:
         print 'attr={', attr.tag, attr.text, '}'
@@ -890,6 +920,7 @@ The commands are:
         parser.add_argument('source')
         parser.add_argument('target')
         parser.add_argument('--version-id')
+        parser.add_argument('--replace', action='store_true')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
@@ -898,7 +929,11 @@ The commands are:
 
         rgwx_query_args = self._get_rgwx_query_args(args)
 
-        OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).copy(source, args.version_id)
+
+        if not args.replace:
+            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).copy(source, args.version_id)
+        else:
+            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).replace(source, args.version_id)
 
     def mdsearch(self):
         parser = argparse.ArgumentParser(
