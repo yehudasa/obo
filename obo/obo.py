@@ -231,9 +231,9 @@ class OboBucket:
         else:
             print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
 
-    def set_versioning(self, status):
+    def set_versioning(self, status, enable_mfa, mfa):
         bucket = self.obo.get_bucket(self.bucket_name)
-        bucket.configure_versioning(status)
+        bucket.configure_versioning(status, mfa_delete = enable_mfa, mfa_token = mfa)
 
     def delete_website(self):
         bucket = self.obo.get_bucket(self.bucket_name)
@@ -393,12 +393,15 @@ class OboObject:
         self.object_name = object_name
         self.query_args = query_args
 
-    def remove(self, version_id, if_unmodified_since):
+    def remove(self, version_id, if_unmodified_since, mfa = None):
         query_args = append_query_arg(self.query_args, 'versionId', version_id)
 
         headers = {}
         if if_unmodified_since is not None:
             headers['x-amz-delete-if-unmodified-since'] = if_unmodified_since
+
+        if mfa is not None:
+            headers['x-amz-mfa'] = '{i} {t}'.format(i=mfa[0], t=mfa[1])
 
         self.obo.make_request("DELETE", bucket=self.bucket.name, key=self.object_name, query_args=query_args, headers=headers)
 
@@ -636,11 +639,19 @@ The subcommands are:
         parser.add_argument('bucket_name')
         parser.add_argument('--enable', action='store_true')
         parser.add_argument('--disable', action='store_true')
+        parser.add_argument('--enable-mfa', action='store_true')
+        parser.add_argument('--mfa-id')
+        parser.add_argument('--mfa-token')
+
         args = parser.parse_args(self.args[1:])
 
         assert args.enable != args.disable
 
-        OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable)
+        mfa_token = None
+        if args.enable_mfa:
+            mfa_token = (args.mfa_id, args.mfa_token)
+
+        OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable, args.enable_mfa, mfa_token)
 
     def website(self):
         parser = argparse.ArgumentParser(
@@ -853,6 +864,8 @@ The commands are:
         parser.add_argument('target')
         parser.add_argument('--version-id')
         parser.add_argument('--if-unmodified-since')
+        parser.add_argument('--mfa-id')
+        parser.add_argument('--mfa-token')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
@@ -860,11 +873,15 @@ The commands are:
 
         rgwx_query_args = self._get_rgwx_query_args(args)
 
+        mfa = None
+        if args.mfa_id:
+            mfa = (args.mfa_id, args.mfa_token)
+
         if len(target) == 1:
             OboBucket(self.obo, args, target[0], False).remove()
         else:
             assert len(target) == 2
-            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id, args.if_unmodified_since)
+            OboObject(self.obo, args, target[0], target[1], query_args=rgwx_query_args).remove(args.version_id, args.if_unmodified_since, mfa=mfa)
 
     def copy(self):
         parser = argparse.ArgumentParser(
