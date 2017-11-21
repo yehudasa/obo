@@ -678,7 +678,7 @@ The subcommands are:
         assert args.enable != args.disable
 
         mfa_token = None
-        if args.enable_mfa:
+        if args.mfa_id:
             mfa_token = (args.mfa_id, args.mfa_token)
 
         OboBucket(self.obo, args, args.bucket_name, True).set_versioning(args.enable, args.enable_mfa, mfa_token)
