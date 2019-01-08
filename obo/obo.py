@@ -218,9 +218,12 @@ class OboBucket:
     def create(self):
         try:
             loc = self.args.location
+            headers = {}
+            if self.args.storage_class is not None:
+                headers['X-Amz-Storage-Class'] = self.args.storage_class
             if not loc:
                 loc = ''
-            self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl, location=loc)
+            self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl, location=loc, headers=headers)
         except socket.error as error:
             print 'Had an issue connecting: %s' % error
 
@@ -310,6 +313,9 @@ class OboBucket:
         headers = meta_headers
         if self.args.content_type is not None:
             headers['Content-Type'] = self.args.content_type
+
+        if self.args.storage_class is not None:
+            headers['X-Amz-Storage-Class'] = self.args.storage_class
 
         if self.args.multipart:
             part_num = 1
@@ -412,6 +418,9 @@ class OboObject:
 
         headers = {}
         headers['x-amz-copy-source'] = src_str
+
+        if self.args.storage_class is not None:
+            headers['X-Amz-Storage-Class'] = self.args.storage_class
 
         self.obo.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
 
@@ -807,6 +816,7 @@ The commands are:
         parser.add_argument('bucket_name')
         parser.add_argument('--location')
         parser.add_argument('--canned-acl')
+        parser.add_argument('--storage-class')
         args = parser.parse_args(sys.argv[2:])
 
         OboBucket(self.obo, args, args.bucket_name, False).create()
@@ -865,7 +875,7 @@ The commands are:
         parser.add_argument('--content-type')
         parser.add_argument('--multipart', action='store_true')
         parser.add_argument('--part_size', type=int, default=8*1024*1024)
-        parser.add_argument('--storage-class', choices = ['STANDARD', 'REDUCED_REDUNDANCY'])
+        parser.add_argument('--storage-class')
         parser.add_argument('--x-amz-meta', nargs='*')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
@@ -921,6 +931,7 @@ The commands are:
         parser.add_argument('target')
         parser.add_argument('--version-id')
         parser.add_argument('--replace', action='store_true')
+        parser.add_argument('--storage-class')
         self._add_rgwx_parser_args(parser)
         args = parser.parse_args(sys.argv[2:])
 
