@@ -3,7 +3,7 @@ nose >=1.0.0
 boto >=2.6.0
 bunch >=1.0.0
 # 0.14 switches to libev, that means bootstrap needs to change too
-gevent ==0.13.6
+gevent
 isodate >=0.4.4
 pytz >=2011k
 ordereddict
