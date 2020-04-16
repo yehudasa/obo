@@ -209,11 +209,11 @@ class OboBucket:
             l = self.bucket.get_all_versions(prefix=self.args.prefix, delimiter=self.args.delimiter,
                                         key_marker=self.args.key_marker, version_id_marker=self.args.version_id_marker,
                                         max_keys=self.args.max_keys)
-            print dump_json(l, cls=BotoJSONEncoderListBucketVersioned)
+            print(dump_json(l, cls=BotoJSONEncoderListBucketVersioned))
         else:
             l = self.bucket.get_all_keys(prefix=self.args.prefix, delimiter=self.args.delimiter,
                                         marker=self.args.marker, max_keys=self.args.max_keys)
-            print dump_json(l)
+            print(dump_json(l))
 
     def create(self):
         try:
@@ -222,14 +222,14 @@ class OboBucket:
                 loc = ''
             self.obo.conn.create_bucket(self.bucket_name, policy=self.args.canned_acl, location=loc)
         except socket.error as error:
-            print 'Had an issue connecting: %s' % error
+            print('Had an issue connecting: %s' % error)
 
     def stat(self, obj):
         if obj:
             k = self.bucket.get_key(obj)
-            print dump_json(k)
+            print(dump_json(k))
         else:
-            print json.dumps(self.bucket, cls=OboBucketStatus, indent=4)
+            print(json.dumps(self.bucket, cls=OboBucketStatus, indent=4))
 
     def set_versioning(self, status, enable_mfa, mfa):
         bucket = self.obo.get_bucket(self.bucket_name)
@@ -241,7 +241,7 @@ class OboBucket:
 
     def get_website(self):
         bucket = self.obo.get_bucket(self.bucket_name)
-        print dump_json(bucket.get_website_configuration_obj())
+        print(dump_json(bucket.get_website_configuration_obj()))
 
     def configure_website(self, suffix, error_key, redirect_all_host, redirect_all_protocol,
             condition_key_prefix, condition_http_error_code, redirect_hostname, redirect_protocol,
@@ -272,7 +272,7 @@ class OboBucket:
     def getacl(self, obj):
         acl = self.bucket.get_acl(obj, version_id=self.args.version_id)
         # TODO include a better format option for importing back
-        print acl
+        print(acl)
 
     def get(self, obj):
         k = Key(self.bucket)
@@ -337,7 +337,7 @@ class OboBucket:
         except:
             loc = ''
 
-        print dump_json(loc)
+        print(dump_json(loc))
 
     def get_lifecycle(self):
         try:
@@ -345,7 +345,7 @@ class OboBucket:
         except:
             lc = boto.s3.lifecycle.Lifecycle()
 
-        print dump_json(lc)
+        print(dump_json(lc))
 
     def add_lifecycle(self, rule_id, prefix, status_bool, expiration, transition):
 
@@ -441,18 +441,18 @@ class OboObject:
         if k.cache_control:
             headers['Cache-Control'] = k.cache_control
 
-        print 'headers=', headers
+        print('headers=', headers)
 
         self.obo.make_request("PUT", bucket=self.bucket.name, key=self.object_name, query_args=self.query_args, headers=headers)
 
 def next_xml_entry(attr):
     if attr.text:
-        print 'attr={', attr.tag, attr.text, '}'
+        print('attr={', attr.tag, attr.text, '}')
         return (attr.tag, attr.text)
     else:
         result = []
         for el in attr.getiterator():
-            print '>', el
+            print('>', el)
             result.append(dict(next_xml_entry(x) for x in el))
         return (attr.tag, None)
         #return [dict(next_xml_entry(x) for x in el) for el in attr.getchildren()]
@@ -486,8 +486,8 @@ class OboMDSearch:
 
         s = result.read()
 
-        print s
-        print dump_json(json.loads(s))
+        print(s)
+        print(dump_json(json.loads(s)))
 
 
     def search(self):
@@ -504,7 +504,7 @@ class OboMDSearch:
 
         result = self.obo.make_request("GET", bucket=self.bucket_name, key='', query_args=query_args, headers=headers)
         s = result.read()
-        print dump_json(json.loads(s))
+        print(dump_json(json.loads(s)))
 
         result = json.loads(s)
 
@@ -529,7 +529,7 @@ class OboMDSearch:
 
         l.sort(key = lambda l: (l.name, -l.versioned_epoch))
 
-        print dump_json(l)
+        print(dump_json(l))
 
 
 class OboService:
@@ -538,7 +538,7 @@ class OboService:
         self.args = args
 
     def list_buckets(self):
-        print dump_json(self.obo.conn.get_all_buckets())
+        print(dump_json(self.obo.conn.get_all_buckets()))
 
 class OboBucketLocationCommand:
     def __init__(self, obo, args):
@@ -554,7 +554,7 @@ class OboBucketLocationCommand:
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(self.args[0:1])
         if not hasattr(self, args.subcommand):
-            print 'Unrecognized subcommand:', args.subcommand
+            print('Unrecognized subcommand:', args.subcommand)
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
@@ -583,7 +583,7 @@ class OboBucketLifecycleCommand:
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(self.args[0:1])
         if not hasattr(self, args.subcommand):
-            print 'Unrecognized subcommand:', args.subcommand
+            print('Unrecognized subcommand:', args.subcommand)
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
@@ -656,7 +656,7 @@ The subcommands are:
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(self.args[0:1])
         if not hasattr(self, args.subcommand):
-            print 'Unrecognized subcommand:', args.subcommand
+            print('Unrecognized subcommand:', args.subcommand)
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
@@ -749,7 +749,7 @@ The commands are:
         # exclude the rest of the args too, or validation will fail
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command) or args.command[0] == '_':
-            print 'Unrecognized command:', args.command
+            print('Unrecognized command:', args.command)
             parser.print_help()
             exit(1)
         # use dispatch pattern to invoke method with same name
@@ -975,7 +975,7 @@ def main():
                 'reason': e.reason,
                 }
 
-        print 'ERROR: ' + json.dumps(err)
+        print('ERROR: ' + json.dumps(err))
     except OBOException as e:
-        print'ERROR: ' + e.message
+        print('ERROR: ' + e.message)
 
