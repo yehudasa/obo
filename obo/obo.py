@@ -18,12 +18,14 @@ class OBO:
         if port:
             port = int(port)
 
+        is_secure = (port == 443)
+
         self.conn = boto.connect_s3(
                 aws_access_key_id = access_key,
                 aws_secret_access_key = secret_key,
                 host=host,
                 port=port,
-                is_secure=False,               # uncomment if you are not using ssl
+                is_secure=is_secure,               # uncomment if you are not using ssl
                 calling_format = boto.s3.connection.OrdinaryCallingFormat(),
                 )
 
